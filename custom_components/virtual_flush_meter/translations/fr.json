@@ -1,0 +1,40 @@
+{
+  "title": "Virtual Flush Meter",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Compter les chasses d'eau",
+        "description": "Compte les chasses d'eau à partir d'une sonde de température plongée dans la cuvette des WC, et estime l'eau chassée : litres = chasses × volume par chasse × calibration.",
+        "data": {
+          "source_sensor": "Sonde de température dans la cuvette",
+          "derivative_threshold": "Vitesse de variation minimale (°C/min)",
+          "min_amplitude": "Variation de température minimale (°C)",
+          "window": "Fenêtre de détection (min)",
+          "debounce": "Délai minimal entre deux chasses (min)",
+          "flush_volume": "Volume par chasse (L)",
+          "calibration": "Facteur de calibration",
+          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Cette sonde de température est déjà utilisée par un Virtual Flush Meter."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options du compteur de chasses",
+        "data": {
+          "derivative_threshold": "Vitesse de variation minimale (°C/min)",
+          "min_amplitude": "Variation de température minimale (°C)",
+          "window": "Fenêtre de détection (min)",
+          "debounce": "Délai minimal entre deux chasses (min)",
+          "flush_volume": "Volume par chasse (L)",
+          "calibration": "Facteur de calibration",
+          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)"
+        }
+      }
+    }
+  }
+}
