@@ -6,7 +6,16 @@
 
 [Home Assistant](https://www.home-assistant.io/) integration that **counts toilet flushes** and estimates the **flushed water (in litres)** from a single temperature probe immersed in the toilet bowl (e.g. Sonoff SNZB-02D). The litres entity can be added to the **Water** section of the Energy dashboard as an individual water device.
 
-> 🚧 Work in progress: the configuration flow is available, flush detection is not implemented yet.
+> 🚧 Early version (0.1): detection thresholds still need to be validated on real data.
+
+## Entities
+
+| Entity | Description |
+|---|---|
+| Litres | Flushed water (L), cumulative. Add it in Energy → Water → Individual water devices. |
+| Flushes | Number of flushes, cumulative (works with `utility_meter`). |
+| Cold water | Lowest bowl temperature over the last hours, approximating the mains water temperature. Starts again from the current value after a restart. |
+| Flush | ON while a flush is in progress, for automations. |
 
 ## Principle
 

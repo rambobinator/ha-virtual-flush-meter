@@ -6,7 +6,16 @@
 
 Intégration [Home Assistant](https://www.home-assistant.io/) qui **compte les chasses d'eau** et estime l'**eau chassée (en litres)** à partir d'une seule sonde de température plongée dans la cuvette des WC (ex. Sonoff SNZB-02D). L'entité litres peut être ajoutée dans la section **Eau** du tableau de bord Énergie comme appareil d'eau individuel.
 
-> 🚧 En cours de développement : la configuration est disponible, la détection des chasses n'est pas encore implémentée.
+> 🚧 Version préliminaire (0.1) : les seuils de détection restent à valider sur des données réelles.
+
+## Entités
+
+| Entité | Description |
+|---|---|
+| Litres | Eau chassée (L), cumulée. À ajouter dans Énergie → Eau → Appareils d'eau individuels. |
+| Chasses | Nombre de chasses, cumulé (compatible `utility_meter`). |
+| Eau froide | Température la plus basse de la cuvette sur les dernières heures, proche de celle de l'eau du réseau. Repart de la valeur courante après un redémarrage. |
+| Chasse | ON pendant une chasse, pour les automatisations. |
 
 ## Principe
 

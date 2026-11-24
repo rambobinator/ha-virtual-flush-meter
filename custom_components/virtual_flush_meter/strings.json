@@ -36,5 +36,23 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "litres": {
+        "name": "Litres"
+      },
+      "flushes": {
+        "name": "Flushes"
+      },
+      "cold_water": {
+        "name": "Cold water"
+      }
+    },
+    "binary_sensor": {
+      "flush": {
+        "name": "Flush"
+      }
+    }
   }
 }

@@ -28,3 +28,21 @@ jobs:
 
       - name: Run Ruff format check
         run: ruff format --check custom_components/
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run detector tests
+        run: pytest -q tests

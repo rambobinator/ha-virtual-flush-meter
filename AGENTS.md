@@ -12,7 +12,11 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 - `__init__.py` : setup/unload, rechargement sur changement d'options.
 - `const.py` : clés de config et valeurs par défaut (source unique de vérité).
 - `config_flow.py` : config flow + options flow (la sonde source est figée après création).
-- `coordinator.py` : moteur de détection de chasse (événementiel, pas de polling).
+- `detector.py` : logique de détection pure (stdlib seule, sans Home Assistant), testée
+  par `tests/test_detector.py` (`pytest -q tests`).
+- `coordinator.py` : relie la sonde source au détecteur (événementiel, pas de polling,
+  minuteur pour clore un événement sans nouvel échantillon).
+- `entity.py` : entité de base (appareil unique par entrée, abonnement au coordinator).
 - `sensor.py` : litres chassés, nombre de chasses, T eau froide réseau.
 - `binary_sensor.py` : chasse en cours.
 - `strings.json` (EN, référence hassfest) + `translations/en.json`, `translations/fr.json`.
@@ -31,11 +35,13 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 
 ## Entités
 - `sensor.<name>_litres` : device_class water, state_class total_increasing, unité L,
-  = chasses × flush_volume × calibration, restauré au redémarrage. Doit apparaître
+  incrémenté de flush_volume × calibration à chaque chasse (un changement d'options
+  ne réécrit jamais le passé), restauré au redémarrage. Doit apparaître
   dans Énergie → Eau → Appareils d'eau individuels.
 - `sensor.<name>_flushes` : nombre de chasses, total_increasing (utilisable par utility_meter).
 - `sensor.<name>_cold_water` : minimum glissant de la source sur `cold_water_window`
-  (12 h par défaut), réutilisable par ha-virtual-boiler-water-meter.
+  (12 h par défaut), réutilisable par ha-virtual-boiler-water-meter. Historique en
+  mémoire seulement : repart de la valeur courante après un redémarrage.
 - `binary_sensor.<name>_flush` : ON pendant l'événement (pour automatisations).
 
 ## Conventions
