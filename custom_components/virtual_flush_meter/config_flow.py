@@ -63,8 +63,12 @@ def _build_schema(user_input: dict, include_source: bool = True) -> vol.Schema:
         )
 
     for key, default, vmin, vmax, step, unit in _NUMBER_FIELDS:
+        # NumberSelector rejects unit_of_measurement=None: omit the key instead.
+        config = NumberSelectorConfig(min=vmin, max=vmax, step=step, mode="box")
+        if unit:
+            config["unit_of_measurement"] = unit
         schema_dict[vol.Required(key, default=user_input.get(key, default))] = NumberSelector(
-            NumberSelectorConfig(min=vmin, max=vmax, step=step, unit_of_measurement=unit)
+            config
         )
 
     return vol.Schema(schema_dict)
