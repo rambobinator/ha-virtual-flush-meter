@@ -1,7 +1,12 @@
 {
   "domain": "virtual_flush_meter",
   "name": "Virtual Flush Meter",
-  "codeowners": ["@rambobinator"],
+  "categories": [
+    "water"
+  ],
+  "codeowners": [
+    "@rambobinator"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/rambobinator/ha-virtual-flush-meter",
