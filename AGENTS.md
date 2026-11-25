@@ -23,15 +23,24 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   Les traductions vivent DANS le composant, jamais à la racine du dépôt.
 - `brand/icon.png` (256 px) et `brand/icon@2x.png` (512 px), générés depuis `docs/logo.jpg`.
 
-## Détection d'une chasse
-- Un événement = variation cumulée ≥ `min_amplitude` (1.0 °C) en ≤ `window` (30 min),
-  points rapprochés regroupés, anti-rebond `debounce` (5 min),
-  dérivée |dT/dt| ≥ `derivative_threshold` (0.3 °C/min).
-- La trajectoire peut être en hausse OU en baisse (la cuvette converge vers la
-  température du réseau).
-- Artefacts : ignorer un seul point isolé au-delà de ±2 °C sans continuité
-  (`OUTLIER_THRESHOLD`).
+## Détection d'une chasse (v2 : amplitude en fenêtre glissante)
+- Pas de porte de dérivée par pas : une vitesse entre deux échantillons dépend de la
+  fréquence d'émission de la sonde (cause des chasses ratées en v1).
+- Départ : |valeur − valeur calme| ≥ `start_threshold` (0.3 °C) dans la fenêtre
+  `window` (30 min), dans les deux sens. Les échantillons antérieurs à la fin de
+  l'événement précédent, ou issus de l'historique recorder, ne sont jamais « calmes ».
+- Écart disponible = valeur calme − minimum glissant réseau (échantillons antérieurs
+  à l'événement, sur `cold_water_window`).
+- Comptage : excursion VERS la référence réseau (vers le bas) d'au moins
+  min(`min_amplitude`, `gap_fraction` × écart). La dérive ambiante va toujours vers
+  l'ambiance (sens opposé) : jamais comptée. Ne pas réintroduire le comptage à la hausse.
+- Plancher de bruit : écart < `min_gap` (0.8 °C) → cécité assumée, rien n'est compté.
+- Fin : `debounce` min sans nouvel extrême, ou `window` après le départ ; une nouvelle
+  chasse exige `debounce` min depuis le départ de la précédente.
+- Artefacts : un point isolé à plus de ±2 °C sans continuité est ignoré (`OUTLIER_THRESHOLD`).
 - Ignorer les états `unknown` / `unavailable` et les valeurs non numériques.
+- Régressions obligatoires (tests/test_detector.py) : nuits sans chasse (dérive de
+  réchauffement ≥ 0.4 °C/15 min, refroidissement, bruit) = zéro détection.
 
 ## Entités
 - `sensor.<name>_litres` : device_class water, state_class total_increasing, unité L,
@@ -40,9 +49,10 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   dans Énergie → Eau → Appareils d'eau individuels.
 - `sensor.<name>_flushes` : nombre de chasses, total_increasing (utilisable par utility_meter).
 - `sensor.<name>_cold_water` : minimum glissant de la source sur `cold_water_window`
-  (12 h par défaut), réutilisable par ha-virtual-boiler-water-meter. Historique en
-  mémoire seulement : repart de la valeur courante après un redémarrage.
-- `binary_sensor.<name>_flush` : ON pendant l'événement (pour automatisations).
+  (12 h par défaut), réutilisable par ha-virtual-boiler-water-meter. Historique reconstruit depuis le
+  recorder au démarrage (`after_dependencies: recorder`).
+- `binary_sensor.<name>_flush` : ON pendant l'événement (pour automatisations), attributs
+  de diagnostic du dernier événement (valeur calme, écart, seuil, cécité).
 
 ## Conventions
 - Python 3.13, Home Assistant ≥ 2024.12, `iot_class: calculated`.
@@ -57,7 +67,8 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   (le workflow release vérifie la concordance).
 
 ## Limites connues
-- Faux négatifs quand T réseau ≈ T cuvette (intersaison).
+- Faux négatifs quand T réseau ≈ T cuvette (intersaison) : cécité assumée sous `min_gap`.
+- Aveugle si l'eau du réseau est plus chaude que la cuvette (seules les baisses comptent).
 - La sonde n'émet que sur changement ≥ 0.1 °C : la cinétique du pic est écrêtée.
 - La classification 3 L / 6 L est expérimentale (étalonnage supervisé), ne pas la
   présenter comme fiable.

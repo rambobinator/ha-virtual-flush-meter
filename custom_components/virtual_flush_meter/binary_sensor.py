@@ -27,3 +27,8 @@ class FlushBinarySensor(VirtualFlushEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         return self.coordinator.detector.in_flush
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Figures of the last event, to tune the thresholds."""
+        return self.coordinator.detector.diagnostics

@@ -7,7 +7,9 @@ the detector, and schedules a timer so an event can end without a new sample.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import partial
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -23,26 +25,33 @@ from homeassistant.helpers.event import (
     async_track_point_in_utc_time,
     async_track_state_change_event,
 )
+import homeassistant.util.dt as dt_util
 
 from .const import (
     CONF_CALIBRATION,
     CONF_COLD_WATER_WINDOW,
     CONF_DEBOUNCE,
-    CONF_DERIVATIVE_THRESHOLD,
     CONF_FLUSH_VOLUME,
+    CONF_GAP_FRACTION,
     CONF_MIN_AMPLITUDE,
+    CONF_MIN_GAP,
     CONF_SOURCE_SENSOR,
+    CONF_START_THRESHOLD,
     CONF_WINDOW,
     DEFAULT_CALIBRATION,
     DEFAULT_COLD_WATER_WINDOW,
     DEFAULT_DEBOUNCE,
-    DEFAULT_DERIVATIVE_THRESHOLD,
     DEFAULT_FLUSH_VOLUME,
+    DEFAULT_GAP_FRACTION,
     DEFAULT_MIN_AMPLITUDE,
+    DEFAULT_MIN_GAP,
+    DEFAULT_START_THRESHOLD,
     DEFAULT_WINDOW,
     OUTLIER_THRESHOLD,
 )
 from .detector import FlushDetector
+
+_LOGGER = logging.getLogger(__name__)
 
 EVENT_UPDATE = "update"
 
@@ -60,14 +69,17 @@ class FlushCoordinator:
             CONF_CALIBRATION, DEFAULT_CALIBRATION
         )
         self.detector = FlushDetector(
-            derivative_threshold=config.get(
-                CONF_DERIVATIVE_THRESHOLD, DEFAULT_DERIVATIVE_THRESHOLD
-            ),
+            start_threshold=config.get(CONF_START_THRESHOLD, DEFAULT_START_THRESHOLD),
             min_amplitude=config.get(CONF_MIN_AMPLITUDE, DEFAULT_MIN_AMPLITUDE),
+            gap_fraction=config.get(CONF_GAP_FRACTION, DEFAULT_GAP_FRACTION),
+            min_gap=config.get(CONF_MIN_GAP, DEFAULT_MIN_GAP),
             window=config.get(CONF_WINDOW, DEFAULT_WINDOW),
             debounce=config.get(CONF_DEBOUNCE, DEFAULT_DEBOUNCE),
             cold_water_window=config.get(CONF_COLD_WATER_WINDOW, DEFAULT_COLD_WATER_WINDOW),
             outlier_threshold=OUTLIER_THRESHOLD,
+        )
+        self.cold_water_window = timedelta(
+            hours=config.get(CONF_COLD_WATER_WINDOW, DEFAULT_COLD_WATER_WINDOW)
         )
         self.unit: str | None = None
         self._listeners: list[Listener] = []
@@ -84,12 +96,41 @@ class FlushCoordinator:
 
         return remove
 
-    @callback
-    def async_start(self) -> None:
+    async def async_start(self) -> None:
+        await self._async_seed_from_recorder()
         self._handle_state(self.hass.states.get(self.source))
         self._unsub_state = async_track_state_change_event(
             self.hass, [self.source], self._on_state_change
         )
+
+    async def _async_seed_from_recorder(self) -> None:
+        """Rebuild the cold water history so a restart does not blind detection."""
+        if "recorder" not in self.hass.config.components:
+            return
+        from homeassistant.components.recorder import get_instance, history
+
+        start = dt_util.utcnow() - self.cold_water_window
+        try:
+            states = await get_instance(self.hass).async_add_executor_job(
+                partial(
+                    history.state_changes_during_period,
+                    self.hass,
+                    start,
+                    entity_id=self.source,
+                    no_attributes=True,
+                    include_start_time_state=False,
+                )
+            )
+        except Exception:  # noqa: BLE001 - history is a best-effort bonus
+            _LOGGER.warning("Could not read the history of %s", self.source, exc_info=True)
+            return
+        samples = []
+        for state in states.get(self.source, []):
+            try:
+                samples.append((state.last_updated, float(state.state)))
+            except ValueError:
+                continue
+        self.detector.seed_history(samples)
 
     @callback
     def async_stop(self) -> None:

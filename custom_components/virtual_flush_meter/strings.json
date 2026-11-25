@@ -4,11 +4,13 @@
     "step": {
       "user": {
         "title": "Count toilet flushes",
-        "description": "Counts toilet flushes from a temperature probe immersed in the toilet bowl, and estimates the flushed water: litres = flushes × volume per flush × calibration.",
+        "description": "Counts toilet flushes from a temperature probe immersed in the toilet bowl. A flush is a drop towards the mains water temperature of at least min(amplitude, share × available gap), where the available gap is the calm bowl temperature minus the lowest temperature of the last hours. Litres = flushes × volume per flush × calibration.",
         "data": {
           "source_sensor": "Temperature probe in the toilet bowl",
-          "derivative_threshold": "Minimum rate of change (°C/min)",
-          "min_amplitude": "Minimum temperature change (°C)",
+          "start_threshold": "Start threshold (°C away from the calm value)",
+          "min_amplitude": "Amplitude to count a flush, upper bound (°C)",
+          "gap_fraction": "Share of the available gap required",
+          "min_gap": "Noise floor: minimum available gap (°C)",
           "window": "Detection window (min)",
           "debounce": "Minimum time between two flushes (min)",
           "flush_volume": "Volume per flush (L)",
@@ -26,8 +28,10 @@
       "init": {
         "title": "Virtual Flush Meter options",
         "data": {
-          "derivative_threshold": "Minimum rate of change (°C/min)",
-          "min_amplitude": "Minimum temperature change (°C)",
+          "start_threshold": "Start threshold (°C away from the calm value)",
+          "min_amplitude": "Amplitude to count a flush, upper bound (°C)",
+          "gap_fraction": "Share of the available gap required",
+          "min_gap": "Noise floor: minimum available gap (°C)",
           "window": "Detection window (min)",
           "debounce": "Minimum time between two flushes (min)",
           "flush_volume": "Volume per flush (L)",

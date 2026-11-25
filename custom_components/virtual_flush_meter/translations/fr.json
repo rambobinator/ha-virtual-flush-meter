@@ -4,11 +4,13 @@
     "step": {
       "user": {
         "title": "Compter les chasses d'eau",
-        "description": "Compte les chasses d'eau à partir d'une sonde de température plongée dans la cuvette des WC, et estime l'eau chassée : litres = chasses × volume par chasse × calibration.",
+        "description": "Compte les chasses d'eau à partir d'une sonde de température plongée dans la cuvette des WC. Une chasse est une baisse vers la température de l'eau du réseau d'au moins min(amplitude, part × écart disponible), l'écart disponible étant la température calme de la cuvette moins la plus basse des dernières heures. Litres = chasses × volume par chasse × calibration.",
         "data": {
           "source_sensor": "Sonde de température dans la cuvette",
-          "derivative_threshold": "Vitesse de variation minimale (°C/min)",
-          "min_amplitude": "Variation de température minimale (°C)",
+          "start_threshold": "Seuil de départ (°C d'écart à la valeur calme)",
+          "min_amplitude": "Amplitude pour compter une chasse, plafond (°C)",
+          "gap_fraction": "Part de l'écart disponible exigée",
+          "min_gap": "Plancher de bruit : écart disponible minimal (°C)",
           "window": "Fenêtre de détection (min)",
           "debounce": "Délai minimal entre deux chasses (min)",
           "flush_volume": "Volume par chasse (L)",
@@ -26,8 +28,10 @@
       "init": {
         "title": "Options du compteur de chasses",
         "data": {
-          "derivative_threshold": "Vitesse de variation minimale (°C/min)",
-          "min_amplitude": "Variation de température minimale (°C)",
+          "start_threshold": "Seuil de départ (°C d'écart à la valeur calme)",
+          "min_amplitude": "Amplitude pour compter une chasse, plafond (°C)",
+          "gap_fraction": "Part de l'écart disponible exigée",
+          "min_gap": "Plancher de bruit : écart disponible minimal (°C)",
           "window": "Fenêtre de détection (min)",
           "debounce": "Délai minimal entre deux chasses (min)",
           "flush_volume": "Volume par chasse (L)",
