@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ha-virtual-flush-meter"
-version = "0.2.2"
+version = "0.3.0"
 description = "Home Assistant integration that counts toilet flushes and estimates flushed water from a single bowl temperature probe"
 readme = "README.md"
 license = {text = "MIT"}
