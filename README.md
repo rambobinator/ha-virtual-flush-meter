@@ -22,7 +22,7 @@
 After a flush, the bowl fills with fresh mains water, colder than the water that sat in the bowl, then slowly warms back to room temperature. A flush is detected as a drop **towards the mains water temperature**:
 
 - an event starts as soon as the temperature moves 0.3 °C away from its calm value within 30 min, whatever the speed;
-- it is counted if the drop reaches **min(1.0 °C, 50 % of the available gap)**, where the available gap is the calm temperature minus the lowest temperature of the last 12 hours (≈ mains water);
+- it is counted if the drop reaches **min(1.0 °C, 35 % of the available gap)**, where the available gap is the calm temperature minus the lowest temperature of the last 12 hours (≈ mains water);
 - if the available gap is below 0.8 °C, the probe cannot tell a flush from noise: nothing is counted;
 - warming back towards room temperature is never counted, since it goes the other way;
 - at least 5 min between two flushes.
@@ -40,7 +40,7 @@ The **Flush** binary sensor exposes the figures of the last event (calm value, a
 | Temperature probe in the toilet bowl | required |
 | Start threshold (°C away from the calm value) | 0.3 |
 | Amplitude to count a flush, upper bound (°C) | 1.0 |
-| Share of the available gap required | 0.5 |
+| Share of the available gap required | 0.35 |
 | Noise floor: minimum available gap (°C) | 0.8 |
 | Detection window (min) | 30 |
 | Minimum time between two flushes (min) | 5 |

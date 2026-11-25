@@ -22,7 +22,7 @@ Intégration [Home Assistant](https://www.home-assistant.io/) qui **compte les c
 Après une chasse, la cuvette se remplit d'eau fraîche du réseau, plus froide que l'eau qui stagnait, puis se réchauffe lentement vers la température de la pièce. Une chasse est détectée comme une baisse **vers la température de l'eau du réseau** :
 
 - un événement démarre dès que la température s'écarte de 0,3 °C de sa valeur calme en 30 min, quelle que soit la vitesse ;
-- il est compté si la baisse atteint **min(1,0 °C ; 50 % de l'écart disponible)**, l'écart disponible étant la température calme moins la plus basse des 12 dernières heures (≈ eau du réseau) ;
+- il est compté si la baisse atteint **min(1,0 °C ; 35 % de l'écart disponible)**, l'écart disponible étant la température calme moins la plus basse des 12 dernières heures (≈ eau du réseau) ;
 - si l'écart disponible est inférieur à 0,8 °C, la sonde ne distingue plus une chasse du bruit : rien n'est compté ;
 - le réchauffement vers la température de la pièce n'est jamais compté, puisqu'il va dans l'autre sens ;
 - au moins 5 min entre deux chasses.
@@ -40,7 +40,7 @@ Le capteur binaire **Chasse** expose les chiffres du dernier événement (valeur
 | Sonde de température dans la cuvette | obligatoire |
 | Seuil de départ (°C d'écart à la valeur calme) | 0,3 |
 | Amplitude pour compter une chasse, plafond (°C) | 1,0 |
-| Part de l'écart disponible exigée | 0,5 |
+| Part de l'écart disponible exigée | 0,35 |
 | Plancher de bruit : écart disponible minimal (°C) | 0,8 |
 | Fenêtre de détection (min) | 30 |
 | Délai minimal entre deux chasses (min) | 5 |

@@ -29,6 +29,9 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 - Départ : |valeur − valeur calme| ≥ `start_threshold` (0.3 °C) dans la fenêtre
   `window` (30 min), dans les deux sens. Les échantillons antérieurs à la fin de
   l'événement précédent, ou issus de l'historique recorder, ne sont jamais « calmes ».
+  La valeur tenue au début de la fenêtre (dernier échantillon avant) compte aussi :
+  HA n'émet pas de changement d'état quand la sonde renvoie la même valeur.
+- Un événement est daté de son premier échantillon en écart (pas de la valeur calme).
 - Écart disponible = valeur calme − minimum glissant réseau (échantillons antérieurs
   à l'événement, sur `cold_water_window`).
 - Comptage : excursion VERS la référence réseau (vers le bas) d'au moins
@@ -39,6 +42,8 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   chasse exige `debounce` min depuis le départ de la précédente.
 - Artefacts : un point isolé à plus de ±2 °C sans continuité est ignoré (`OUTLIER_THRESHOLD`).
 - Ignorer les états `unknown` / `unavailable` et les valeurs non numériques.
+- `gap_fraction` = 0.35 par défaut : rejeu de données réelles SNZB-02LD (pas de 0,5 °C,
+  émission ~15 min), 6 chasses sur 7 détectées, zéro faux positif.
 - Régressions obligatoires (tests/test_detector.py) : nuits sans chasse (dérive de
   réchauffement ≥ 0.4 °C/15 min, refroidissement, bruit) = zéro détection.
 

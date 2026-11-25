@@ -6,8 +6,11 @@ flushes).
 
 - Start: an event starts as soon as the value moves at least
   ``start_threshold`` away from a calm value seen within the last ``window``
-  minutes, in either direction. Samples older than the end of the previous
-  event never serve as calm value.
+  minutes, in either direction. The value held at the start of the window
+  (last sample before it) counts too: Home Assistant fires no state change
+  while the probe keeps reporting the same value, so a reading hours old can
+  still be the current one. Samples older than the end of the previous event,
+  or coming from the recorder history, never serve as calm value.
 - Available gap: calm value minus the cold mains reference (rolling minimum
   of the samples before the event, over ``cold_water_window`` hours).
 - Count: the excursion must go towards the mains reference (downwards) and
@@ -40,8 +43,9 @@ _EPSILON = 1e-9
 
 @dataclass
 class _Event:
-    start: datetime
+    start: datetime  # first sample away from the calm value
     calm: float
+    calm_ts: datetime
     direction: int
     extreme: float
     extreme_ts: datetime
@@ -204,9 +208,20 @@ class FlushDetector:
 
     def _try_start(self, ts: datetime, value: float) -> None:
         oldest = ts - self._window
-        if self._calm_since is not None:
-            oldest = max(oldest, self._calm_since)
-        calm = [(t, x) for t, x in self._history if t >= oldest and t < ts]
+        calm: list[tuple[datetime, float]] = []
+        held: tuple[datetime, float] | None = None
+        # Walk back from the newest sample: only the window and one more sample matter.
+        for t, x in reversed(self._history):
+            if t >= ts:
+                continue
+            if self._calm_since is not None and t < self._calm_since:
+                break
+            if t < oldest:
+                held = (t, x)  # value still current at the start of the window
+                break
+            calm.append((t, x))
+        if held is not None:
+            calm.append(held)
         if not calm:
             return
         # On ties, keep the most recent calm point.
@@ -224,8 +239,9 @@ class FlushDetector:
         reference = min(before) if before else calm
         gap = calm - reference
         self._event = self._last_event = _Event(
-            start=calm_ts,
+            start=ts,
             calm=calm,
+            calm_ts=calm_ts,
             direction=direction,
             extreme=value,
             extreme_ts=ts,

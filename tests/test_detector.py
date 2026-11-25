@@ -220,3 +220,17 @@ def test_restart_during_or_after_flush_does_not_recount():
     det = make(mains=None)
     det.seed_history([(at(-60), 12.0), (at(-5), 18.5), (at(-2), 17.0)])
     assert feed(det, [(0, 15.0), (1, 14.5)]) == 0
+
+
+def test_value_held_longer_than_window_is_calm():
+    """Sparse probe: same reading for 70 min (no state change in HA), then two
+    0.5 degC steps 2 min apart, as observed on a real SNZB-02LD."""
+    det = make(mains=14.7)
+    assert feed(det, [(0, 15.5), (70, 15.0), (72, 14.5)]) == 1
+    assert det.diagnostics["calm_value"] == 15.5
+
+
+def test_old_calm_value_does_not_expire_the_event():
+    """Calm value hours old: the event window runs from the first step, not from it."""
+    det = make(mains=14.7)
+    assert feed(det, [(0, 16.6), (220, 15.9), (222, 15.4)]) == 1
