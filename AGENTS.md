@@ -68,8 +68,9 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 - Tout paramètre doit être modifiable via Options (config_flow), jamais magique.
   Ajouter un paramètre = const.py + config_flow.py + strings.json + en.json + fr.json.
 - Pas de requirements externes : stdlib + homeassistant uniquement.
-- Release : bump `version` dans manifest.json, puis tag `vX.Y.Z` identique
-  (le workflow release vérifie la concordance).
+- Release : bump `version` dans manifest.json ET pyproject.toml, commit, push, puis tag
+  `X.Y.Z` (sans « v », comme ha-virtual-boiler-water-meter) sur ce commit. Le workflow
+  release refuse un tag différent de la version du manifest. Ne pas réutiliser un tag existant.
 
 ## Limites connues
 - Faux négatifs quand T réseau ≈ T cuvette (intersaison) : cécité assumée sous `min_gap`.
