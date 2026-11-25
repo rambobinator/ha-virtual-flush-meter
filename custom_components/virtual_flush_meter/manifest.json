@@ -1,6 +1,9 @@
 {
   "domain": "virtual_flush_meter",
   "name": "Virtual Flush Meter",
+  "after_dependencies": [
+    "recorder"
+  ],
   "categories": [
     "water"
   ],
@@ -9,9 +12,6 @@
   ],
   "config_flow": true,
   "dependencies": [],
-  "after_dependencies": [
-    "recorder"
-  ],
   "documentation": "https://github.com/rambobinator/ha-virtual-flush-meter",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/rambobinator/ha-virtual-flush-meter/issues",
