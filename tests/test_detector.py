@@ -234,3 +234,39 @@ def test_old_calm_value_does_not_expire_the_event():
     """Calm value hours old: the event window runs from the first step, not from it."""
     det = make(mains=14.7)
     assert feed(det, [(0, 16.6), (220, 15.9), (222, 15.4)]) == 1
+
+
+# --- Replay of real data -----------------------------------------------------------
+
+# Real Sonoff SNZB-02LD in a toilet bowl, 33 h, anonymised: minutes since the first
+# reading only. The probe reports 0.5 degC steps when the temperature moves fast,
+# otherwise about every 15 min, and Home Assistant records changes only.
+_REPLAY = Path(__file__).parent / "data/replay_snzb02ld.csv"
+
+# Ground truth from the house water meter: (name, draw start, draw end) in minutes,
+# for each draw followed by a drop of the probe.
+_REAL_FLUSHES = [
+    ("A", 323, 332),
+    ("B", 533, 534),  # missed: the export starts too late for a usable mains reference
+    ("C", 1233, 1234),  # half flush, 3.3 L
+    ("D", 1240, 1254),  # within a shower
+    ("E", 1622, 1624),
+    ("F", 1805, 1807),
+    ("G", 1967, 1970),
+]
+
+
+def _replay_samples():
+    lines = _REPLAY.read_text().splitlines()[1:]
+    return [(float(m), float(v)) for m, v in (line.split(",") for line in lines)]
+
+
+def test_replay_real_data():
+    det = make(mains=None, gap_fraction=0.35)
+    counted = [m for m, v in _replay_samples() if detector.EVENT_FLUSH in det.process(at(m), v)]
+
+    matched = {
+        name for name, start, end in _REAL_FLUSHES if any(start <= m <= end + 10 for m in counted)
+    }
+    assert matched == {"A", "C", "D", "E", "F", "G"}
+    assert len(counted) == len(matched), f"false positives: {counted}"
