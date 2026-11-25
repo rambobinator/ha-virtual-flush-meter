@@ -18,16 +18,23 @@ from .const import (
     CONF_DEBOUNCE,
     CONF_FLUSH_VOLUME,
     CONF_GAP_FRACTION,
+    CONF_HALF_FLUSH_VOLUME,
+    CONF_METER_MAX_VOLUME,
+    CONF_METER_MIN_VOLUME,
     CONF_MIN_AMPLITUDE,
     CONF_MIN_GAP,
     CONF_SOURCE_SENSOR,
     CONF_START_THRESHOLD,
+    CONF_WATER_METER,
     CONF_WINDOW,
     DEFAULT_CALIBRATION,
     DEFAULT_COLD_WATER_WINDOW,
     DEFAULT_DEBOUNCE,
     DEFAULT_FLUSH_VOLUME,
     DEFAULT_GAP_FRACTION,
+    DEFAULT_HALF_FLUSH_VOLUME,
+    DEFAULT_METER_MAX_VOLUME,
+    DEFAULT_METER_MIN_VOLUME,
     DEFAULT_MIN_AMPLITUDE,
     DEFAULT_MIN_GAP,
     DEFAULT_START_THRESHOLD,
@@ -46,6 +53,13 @@ _NUMBER_FIELDS = (
     (CONF_FLUSH_VOLUME, DEFAULT_FLUSH_VOLUME, 1, 15, 0.5, "L"),
     (CONF_CALIBRATION, DEFAULT_CALIBRATION, 0.1, 10, 0.05, None),
     (CONF_COLD_WATER_WINDOW, DEFAULT_COLD_WATER_WINDOW, 1, 48, 1, "h"),
+)
+
+# Only used when a water meter is configured.
+_METER_FIELDS = (
+    (CONF_METER_MIN_VOLUME, DEFAULT_METER_MIN_VOLUME, 0.5, 20, 0.5, "L"),
+    (CONF_METER_MAX_VOLUME, DEFAULT_METER_MAX_VOLUME, 1, 50, 0.5, "L"),
+    (CONF_HALF_FLUSH_VOLUME, DEFAULT_HALF_FLUSH_VOLUME, 0.5, 20, 0.5, "L"),
 )
 
 
@@ -68,7 +82,18 @@ def _build_schema(user_input: dict, include_source: bool = True) -> vol.Schema:
             EntitySelectorConfig(domain="sensor", device_class="temperature", multiple=False)
         )
 
-    for key, default, vmin, vmax, step, unit in _NUMBER_FIELDS:
+    # Optional: EntitySelector cannot take an empty default, pre-fill it instead.
+    meter = user_input.get(CONF_WATER_METER)
+    meter_key = (
+        vol.Optional(CONF_WATER_METER, description={"suggested_value": meter})
+        if meter
+        else vol.Optional(CONF_WATER_METER)
+    )
+    schema_dict[meter_key] = EntitySelector(
+        EntitySelectorConfig(domain="sensor", device_class="water", multiple=False)
+    )
+
+    for key, default, vmin, vmax, step, unit in _NUMBER_FIELDS + _METER_FIELDS:
         # NumberSelector rejects unit_of_measurement=None: omit the key instead.
         config = NumberSelectorConfig(min=vmin, max=vmax, step=step, mode="box")
         if unit:
@@ -100,11 +125,13 @@ class VirtualFlushMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class VirtualFlushMeterOptionsFlow(config_entries.OptionsFlow):
-    """Allow editing every parameter except the source sensor."""
+    """Allow editing every parameter except the probe, including adding a water meter."""
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             user_input[CONF_SOURCE_SENSOR] = self.config_entry.data[CONF_SOURCE_SENSOR]
+            # A cleared optional field is absent: store None so it overrides entry.data.
+            user_input.setdefault(CONF_WATER_METER, None)
             return self.async_create_entry(title="", data=user_input)
 
         current = {**self.config_entry.data, **self.config_entry.options}

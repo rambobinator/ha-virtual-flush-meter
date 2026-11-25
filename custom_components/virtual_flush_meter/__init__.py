@@ -2,8 +2,9 @@
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
-from .coordinator import FlushCoordinator
+from .coordinator import STORAGE_VERSION, FlushCoordinator, storage_key
 
 PLATFORMS = ("sensor", "binary_sensor")
 
@@ -21,6 +22,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete the learned flush volumes with the entry."""
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

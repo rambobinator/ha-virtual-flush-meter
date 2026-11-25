@@ -15,7 +15,11 @@
           "debounce": "Délai minimal entre deux chasses (min)",
           "flush_volume": "Volume par chasse (L)",
           "calibration": "Facteur de calibration",
-          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)"
+          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)",
+          "water_meter": "Compteur d'eau de la maison (optionnel, mesure chaque chasse)",
+          "meter_min_volume": "Plus petite chasse plausible au compteur (L)",
+          "meter_max_volume": "Plus grande chasse plausible au compteur (L)",
+          "half_flush_volume": "Demi-chasse en dessous de (L)"
         }
       }
     },
@@ -36,7 +40,11 @@
           "debounce": "Délai minimal entre deux chasses (min)",
           "flush_volume": "Volume par chasse (L)",
           "calibration": "Facteur de calibration",
-          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)"
+          "cold_water_window": "Fenêtre du minimum glissant eau froide (h)",
+          "water_meter": "Compteur d'eau de la maison (optionnel, mesure chaque chasse)",
+          "meter_min_volume": "Plus petite chasse plausible au compteur (L)",
+          "meter_max_volume": "Plus grande chasse plausible au compteur (L)",
+          "half_flush_volume": "Demi-chasse en dessous de (L)"
         }
       }
     }
@@ -51,6 +59,15 @@
       },
       "cold_water": {
         "name": "Eau froide"
+      },
+      "last_flush_volume": {
+        "name": "Volume dernière chasse"
+      },
+      "half_flushes": {
+        "name": "Demi-chasses"
+      },
+      "full_flushes": {
+        "name": "Chasses complètes"
       }
     },
     "binary_sensor": {

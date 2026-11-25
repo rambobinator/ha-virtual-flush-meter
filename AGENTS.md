@@ -14,7 +14,10 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 - `config_flow.py` : config flow + options flow (la sonde source est figée après création).
 - `detector.py` : logique de détection pure (stdlib seule, sans Home Assistant), testée
   par `tests/test_detector.py` (`pytest -q tests`).
-- `coordinator.py` : relie la sonde source au détecteur (événementiel, pas de polling,
+- `meter.py` : logique pure du compteur d'eau optionnel (prises d'eau, association
+  chasse ↔ prise d'eau, volume mesuré ou de repli, demi/complète), testée par
+  `tests/test_meter.py`.
+- `coordinator.py` : relie la sonde source (et le compteur optionnel) au détecteur (événementiel, pas de polling,
   minuteur pour clore un événement sans nouvel échantillon).
 - `entity.py` : entité de base (appareil unique par entrée, abonnement au coordinator).
 - `sensor.py` : litres chassés, nombre de chasses, T eau froide réseau.
@@ -49,13 +52,16 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 
 ## Entités
 - `sensor.<name>_litres` : device_class water, state_class total_increasing, unité L,
-  incrémenté de flush_volume × calibration à chaque chasse (un changement d'options
+  incrémenté du volume de chaque chasse : mesuré au compteur si configuré (ajouté
+  quelques minutes après la chasse), sinon flush_volume × calibration (un changement d'options
   ne réécrit jamais le passé), restauré au redémarrage. Doit apparaître
   dans Énergie → Eau → Appareils d'eau individuels.
 - `sensor.<name>_flushes` : nombre de chasses, total_increasing (utilisable par utility_meter).
 - `sensor.<name>_cold_water` : minimum glissant de la source sur `cold_water_window`
   (12 h par défaut), réutilisable par ha-virtual-boiler-water-meter. Historique reconstruit depuis le
   recorder au démarrage (`after_dependencies: recorder`).
+- Avec compteur seulement : `sensor.<name>_last_flush_volume` (device_class volume, sans
+  state_class), `sensor.<name>_half_flushes`, `sensor.<name>_full_flushes`.
 - `binary_sensor.<name>_flush` : ON pendant l'événement (pour automatisations), attributs
   de diagnostic du dernier événement (valeur calme, écart, seuil, cécité).
 
@@ -72,9 +78,19 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   `X.Y.Z` (sans « v », comme ha-virtual-boiler-water-meter) sur ce commit. Le workflow
   release refuse un tag différent de la version du manifest. Ne pas réutiliser un tag existant.
 
+## Compteur d'eau (optionnel)
+- La sonde décide qu'il y a chasse ; le compteur ne fait que mesurer le volume. Il ne
+  peut pas détecter seul (un robinet a le même profil). Ne pas l'utiliser pour
+  détecter sans données de rejeu le justifiant.
+- Volumes appris (`recent_volumes`) persistés via `Store`, supprimés avec l'entrée.
+- Constantes de cadence (`METER_*` dans const.py) : liées au rythme d'émission du
+  compteur, pas des réglages utilisateur.
+- Rejeu sur données réelles : demi-chasse 3,3 L mesurée, chasses 6,3 et 6,7 L mesurées,
+  douche / lavage de mains rejetés (repli).
+
 ## Limites connues
 - Faux négatifs quand T réseau ≈ T cuvette (intersaison) : cécité assumée sous `min_gap`.
 - Aveugle si l'eau du réseau est plus chaude que la cuvette (seules les baisses comptent).
 - La sonde n'émet que sur changement ≥ 0.1 °C : la cinétique du pic est écrêtée.
-- La classification 3 L / 6 L est expérimentale (étalonnage supervisé), ne pas la
-  présenter comme fiable.
+- Sans compteur, la classification 3 L / 6 L n'existe pas. Avec compteur, elle est
+  mesurée mais une chasse mêlée à un autre usage est classée « complète » par défaut.

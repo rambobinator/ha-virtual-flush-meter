@@ -16,6 +16,8 @@ Intégration [Home Assistant](https://www.home-assistant.io/) qui **compte les c
 | Chasses | Nombre de chasses, cumulé (compatible `utility_meter`). |
 | Eau froide | Température la plus basse de la cuvette sur les dernières heures, proche de celle de l'eau du réseau (reconstruite depuis l'historique après un redémarrage). |
 | Chasse | ON pendant une chasse, pour les automatisations. |
+| Volume dernière chasse | *Avec un compteur d'eau.* Volume de la dernière chasse, mesuré ou estimé (attribut `measured`). |
+| Demi-chasses / Chasses complètes | *Avec un compteur d'eau.* Nombre de demi-chasses et de chasses complètes, cumulé. |
 
 ## Principe
 
@@ -47,15 +49,30 @@ Le capteur binaire **Chasse** expose les chiffres du dernier événement (valeur
 | Volume par chasse (L) | 6 |
 | Facteur de calibration | 1 |
 | Fenêtre du minimum glissant eau froide (h) | 12 |
+| Compteur d'eau de la maison (optionnel, mesure chaque chasse) | — |
+| Plus petite chasse plausible au compteur (L) | 2 |
+| Plus grande chasse plausible au compteur (L) | 9 |
+| Demi-chasse en dessous de (L) | 4,5 |
 
 Tous les champs sauf la sonde sont modifiables ensuite via **Configurer** sur la carte de l'intégration.
+
+## Optionnel : mesurer chaque chasse avec un compteur d'eau
+
+Si vous avez un compteur d'eau de la maison dans Home Assistant (wM-Bus via wmbusmeters, compteur d'impulsions, compteur communicant…), ajoutez-le à la configuration ou plus tard via **Configurer**. La sonde décide toujours *qu'il y a eu* une chasse ; le compteur dit *combien* d'eau elle a pris :
+
+- la chasse est associée à la prise d'eau du compteur dans les 5 min autour d'elle, en privilégiant celle qui a commencé juste avant que la sonde ne bouge (le remplissage du réservoir démarre à la chasse) ;
+- le volume est lu une fois le remplissage terminé : les litres sont donc ajoutés quelques minutes après la chasse ;
+- une prise d'eau hors de 2 à 9 L signifie que la chasse s'est mêlée à un autre usage (douche, lavage de mains) : le volume retenu est alors celui d'une chasse complète typique, appris sur les dernières chasses mesurées ;
+- en dessous de 4,5 L, la chasse compte comme une demi-chasse.
+
+Le compteur ne peut pas détecter les chasses seul : un robinet ouvert une minute ressemble exactement à une chasse.
 
 ## Limites connues
 
 - Chasses manquées quand l'eau du réseau et l'eau de la cuvette sont à peu près à la même température (intersaison) : sous le plancher de bruit, rien n'est compté.
 - Aveugle quand l'eau du réseau est plus chaude que la cuvette : seules les baisses sont comptées.
 - La sonde ne remonte que les variations d'au moins 0,1 °C : la partie la plus rapide de la variation est mal mesurée.
-- Distinguer les chasses de 3 L et de 6 L est expérimental.
+- Sans compteur d'eau, chaque chasse compte pour le volume configuré : demi-chasses et chasses complètes ne sont pas distinguées.
 
 ## Installation
 
