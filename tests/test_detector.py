@@ -24,6 +24,7 @@ def make(mains=MAINS, **overrides):
         "min_amplitude": 1.0,
         "gap_fraction": 0.5,
         "min_gap": 0.8,
+        "fast_step": 0.5,
         "window": 30,
         "debounce": 5,
         "cold_water_window": 12,
@@ -90,9 +91,31 @@ def test_slow_reporting_probe_counts():
     assert feed(det, [(0, 18.5), (4, 18.0), (8, 17.5), (12, 17.0), (16, 16.6)]) == 1
 
 
-def test_upward_excursion_is_never_counted():
+def test_warm_flush_single_big_step_counts():
+    """Afternoon flush with water warmed in the house pipes: the probe holds
+    15.2 for 89 min, then reports +0.6 in one step (real case, 24/11 15:39)."""
+    det = make(mains=14.7)
+    assert feed(det, [(0, 15.2), (89, 15.8)]) == 1
+    assert det.diagnostics["last_event_direction"] == "up"
+
+
+def test_warm_flush_then_drop_counts_once():
+    """Real case 25/11 16:23: +1.1 then -0.5 three minutes later."""
+    det = make(mains=14.7)
+    assert feed(det, [(0, 14.9), (106, 16.0), (109, 15.5)]) == 1
+
+
+def test_ambient_drift_in_small_reported_steps_is_not_counted():
+    """Evening drift reported every 15 min, up to +0.4 in one step (24/11 21:53)."""
+    det = make(mains=14.7)
+    samples = [(0, 15.7), (75, 15.8), (90, 16.2), (150, 16.3), (180, 16.4)]
+    assert feed(det, samples) == 0
+    assert det.diagnostics["largest_step"] == 0.4
+
+
+def test_slow_rise_with_fine_steps_is_not_counted():
     det = make()
-    assert feed(det, [(0, 15.0), (1, 16.0), (2, 17.5), (3, 18.5)]) == 0
+    assert feed(det, [(0, 15.0), (1, 15.3), (2, 15.6), (3, 16.0), (4, 16.4)]) == 0
 
 
 def test_small_drop_is_not_a_flush():
@@ -112,15 +135,18 @@ def test_adaptive_threshold_uses_available_gap():
 
 
 def test_small_gap_is_blind():
-    # Gap = 18.5 - 17.8 = 0.7 degC < 0.8: count nothing, even a clear drop.
+    # Gap = 18.5 - 17.8 = 0.7 degC < 0.8: the amplitude rule counts nothing,
+    # even a clear drop, when it arrives in small steps.
     det = make(mains=17.8)
-    assert feed(det, [(0, 18.5), (1, 18.0), (2, 17.5), (3, 17.0)]) == 0
+    samples = [(0, 18.5), (1, 18.2), (2, 17.9), (3, 17.6), (4, 17.3), (5, 17.0)]
+    assert feed(det, samples) == 0
     assert det.diagnostics["blind"] is True
 
 
 def test_no_reference_is_blind():
     det = make(mains=None)
-    assert feed(det, [(0, 18.5), (1, 17.5), (2, 16.5)]) == 0
+    samples = [(0, 18.5), (1, 18.2), (2, 17.9), (3, 17.6), (4, 17.3), (5, 17.0)]
+    assert feed(det, samples) == 0
 
 
 # --- Grouping, debounce, end ----------------------------------------------------
@@ -236,23 +262,43 @@ def test_old_calm_value_does_not_expire_the_event():
     assert feed(det, [(0, 16.6), (220, 15.9), (222, 15.4)]) == 1
 
 
+def test_fast_step_counts_even_when_blind():
+    """Real case 25/11 20:31: -0.5 then -0.5 within a minute, gap only 0.1 degC."""
+    det = make(mains=14.5)
+    assert feed(det, [(0, 14.6), (38, 14.1), (39, 13.6)]) == 1
+
+
+def test_candidate_stays_open_for_a_late_second_step():
+    """Real case 26/11 06:12: -0.5, then -0.5 six minutes later (threshold 0.84)."""
+    det = make(mains=13.5, fast_step=0.6)
+    assert feed(det, [(0, 15.9), (48, 15.4), (54, 14.9)]) == 1
+
+
 # --- Replay of real data -----------------------------------------------------------
 
-# Real Sonoff SNZB-02LD in a toilet bowl, 33 h, anonymised: minutes since the first
-# reading only. The probe reports 0.5 degC steps when the temperature moves fast,
-# otherwise about every 15 min, and Home Assistant records changes only.
+# Real Sonoff SNZB-02LD in a toilet bowl, 57 h, anonymised: minutes since the first
+# reading only. The probe reports at once on a 0.5 degC change, otherwise every
+# 15 min, and Home Assistant records changes only.
 _REPLAY = Path(__file__).parent / "data/replay_snzb02ld.csv"
 
-# Ground truth from the house water meter: (name, draw start, draw end) in minutes,
-# for each draw followed by a drop of the probe.
+# Ground truth: each flush seen on the house water meter and on the probe, as
+# (name, minute of the first probe step). Four of them go up: water standing in
+# the house pipes had warmed up.
 _REAL_FLUSHES = [
-    ("A", 323, 332),
-    ("B", 533, 534),  # missed: the export starts too late for a usable mains reference
-    ("C", 1233, 1234),  # half flush, 3.3 L
-    ("D", 1240, 1254),  # within a shower
-    ("E", 1622, 1624),
-    ("F", 1805, 1807),
-    ("G", 1967, 1970),
+    ("A", 323),  # up, ~7 L
+    ("B", 534),  # 6.3 L, gap only 0.5 degC
+    ("N", 577),  # up, half flush 3.3 L
+    ("C", 1234),  # half flush 3.3 L
+    ("D", 1255),  # during a shower
+    ("E", 1623),
+    ("F", 1807),  # up, 6.7 L
+    ("G", 1970),  # 6.3 L
+    ("H", 2055),  # during a shower, gap 0.1 degC
+    ("I", 2195),  # up, half flush 3.3 L
+    ("J", 2636),  # 7.0 L, second step 6 min later
+    ("K", 2668),  # during a shower
+    ("L", 3091),  # up
+    ("M", 3268),  # 6.7 L, single 0.5 degC step
 ]
 
 
@@ -266,7 +312,7 @@ def test_replay_real_data():
     counted = [m for m, v in _replay_samples() if detector.EVENT_FLUSH in det.process(at(m), v)]
 
     matched = {
-        name for name, start, end in _REAL_FLUSHES if any(start <= m <= end + 10 for m in counted)
+        name for name, minute in _REAL_FLUSHES if any(abs(m - minute) <= 10 for m in counted)
     }
-    assert matched == {"A", "C", "D", "E", "F", "G"}
-    assert len(counted) == len(matched), f"false positives: {counted}"
+    assert matched == {name for name, _ in _REAL_FLUSHES}
+    assert len(counted) == len(_REAL_FLUSHES), f"false positives: {counted}"

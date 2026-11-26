@@ -13,13 +13,26 @@ flushes).
   or coming from the recorder history, never serve as calm value.
 - Available gap: calm value minus the cold mains reference (rolling minimum
   of the samples before the event, over ``cold_water_window`` hours).
-- Count: the excursion must go towards the mains reference (downwards) and
-  reach ``min(min_amplitude, gap_fraction x gap)``. Ambient drift always goes
-  the other way (towards ambient), so it is never counted.
-- Noise floor: if the gap is below ``min_gap``, the event is "blind" and is
-  never counted: missing a flush beats counting noise.
-- End: ``debounce`` minutes without a new extreme, or ``window`` minutes after
-  the start. A new flush cannot be counted less than ``debounce`` minutes after
+- Count, asymmetric:
+  - Fast step, either direction: a single step of at least ``fast_step``
+    between two readings is a flush, even when the gap is small. A probe that
+    reports at once on a large change (0.5 degC for the Sonoff SNZB-02, every
+    15 min otherwise) shows a fast change as one big step, while ambient drift
+    arrives in small periodic steps (up to 0.4 degC per 15 min observed) and
+    noise in 0.1 degC steps. A speed cannot be used instead: Home Assistant sees
+    no change while the probe repeats the same value, so a jump held for 90 min
+    looks slower than the evening drift.
+  - Upwards, only a fast step counts: water standing in the house pipes warms
+    up during the day, so an afternoon flush can bring water warmer than the
+    bowl, but the bowl also drifts up towards ambient, slowly.
+  - Downwards, a drop also counts at any speed if it reaches
+    ``min(min_amplitude, gap_fraction x gap)``. Noise floor: if the gap is
+    below ``min_gap``, the event is "blind" for this rule: missing a flush
+    beats counting noise.
+- End: ``window`` minutes after the start; a counted event also ends after
+  ``debounce`` minutes without a new extreme. An uncounted candidate stays open
+  for the whole window, as a sparse probe may report the rest of the change up
+  to 15 min later. A new flush cannot be counted less than ``debounce`` minutes after
   the start of the previous one.
 - Outliers: a single point more than ``outlier_threshold`` away from the
   previous one is held until the next sample: dropped if the signal comes back,
@@ -52,6 +65,7 @@ class _Event:
     gap: float
     threshold: float
     blind: bool
+    max_step: float  # largest single step in the event direction
     counted: bool = False
 
     @property
@@ -69,6 +83,7 @@ class FlushDetector:
         min_amplitude: float,
         gap_fraction: float,
         min_gap: float,
+        fast_step: float,
         window: float,
         debounce: float,
         cold_water_window: float,
@@ -78,6 +93,7 @@ class FlushDetector:
         self._min_amplitude = min_amplitude
         self._gap_fraction = gap_fraction
         self._min_gap = min_gap
+        self._fast_step = fast_step
         self._window = timedelta(minutes=window)
         self._debounce = timedelta(minutes=debounce)
         # An event needs a non-zero quiet period to end, even with debounce = 0.
@@ -108,9 +124,11 @@ class FlushDetector:
     @property
     def deadline(self) -> datetime | None:
         """When the current event ends if no further sample extends it."""
-        if self._event is None:
+        event = self._event
+        if event is None:
             return None
-        return min(self._event.extreme_ts + self._quiet, self._event.start + self._window)
+        end = event.start + self._window
+        return min(event.extreme_ts + self._quiet, end) if event.counted else end
 
     @property
     def diagnostics(self) -> dict[str, float | bool | str | None]:
@@ -126,6 +144,7 @@ class FlushDetector:
             "amplitude_threshold": round(event.threshold, 2),
             "amplitude": round(event.amplitude, 2),
             "blind": event.blind,
+            "largest_step": round(event.max_step, 2),
             "counted": event.counted,
         }
 
@@ -133,10 +152,17 @@ class FlushDetector:
         """Pre-fill the cold water history (e.g. from the recorder at startup).
 
         Seeded samples only feed the mains reference: they never count as a
-        flush nor serve as calm value.
+        flush nor serve as calm value. A fast step among them is taken as a flush
+        already counted, so a restart in the middle of a flush does not count it
+        twice.
         """
+        previous = None
         for ts, value in sorted(samples):
             self._history.append((ts, value))
+            if previous is not None and abs(value - previous) >= self._fast_step - _EPSILON:
+                # Probably a flush already counted before the restart: debounce it.
+                self._last_flush = max(self._last_flush or ts, ts)
+            previous = value
         if self._history:
             last_ts = self._history[-1][0]
             self._prune(last_ts)
@@ -181,12 +207,14 @@ class FlushDetector:
             self._history.popleft()
 
     def _accept(self, ts: datetime, value: float) -> list[str]:
+        step = value - self._last[1] if self._last is not None else 0.0
         self._last = (ts, value)
         self._history.append((ts, value))
         self._prune(ts)
 
         event = self._event
         if event is not None:
+            event.max_step = max(event.max_step, step * event.direction)
             if (value - event.extreme) * event.direction > 0:
                 event.extreme = value
                 event.extreme_ts = ts
@@ -195,9 +223,9 @@ class FlushDetector:
                 and (event.extreme - value) * event.direction >= self._start_threshold - _EPSILON
             ):
                 # Uncounted candidate reversing: new excursion from its extreme.
-                self._start(event.extreme_ts, event.extreme, -event.direction, ts, value)
+                self._start(event.extreme_ts, event.extreme, -event.direction, ts, value, step)
         else:
-            self._try_start(ts, value)
+            self._try_start(ts, value, step)
 
         event = self._event
         if event is not None and not event.counted and self._countable(event):
@@ -206,7 +234,7 @@ class FlushDetector:
             return [EVENT_FLUSH]
         return []
 
-    def _try_start(self, ts: datetime, value: float) -> None:
+    def _try_start(self, ts: datetime, value: float, step: float) -> None:
         oldest = ts - self._window
         calm: list[tuple[datetime, float]] = []
         held: tuple[datetime, float] | None = None
@@ -228,16 +256,28 @@ class FlushDetector:
         hi_ts, hi = max(calm, key=lambda s: (s[1], s[0]))
         lo_ts, lo = min(calm, key=lambda s: (s[1], -s[0].timestamp()))
         if hi - value >= self._start_threshold - _EPSILON:
-            self._start(hi_ts, hi, DOWN, ts, value)
+            self._start(hi_ts, hi, DOWN, ts, value, step)
         elif value - lo >= self._start_threshold - _EPSILON:
-            self._start(lo_ts, lo, UP, ts, value)
+            self._start(lo_ts, lo, UP, ts, value, step)
 
     def _start(
-        self, calm_ts: datetime, calm: float, direction: int, ts: datetime, value: float
+        self,
+        calm_ts: datetime,
+        calm: float,
+        direction: int,
+        ts: datetime,
+        value: float,
+        step: float,
     ) -> None:
         before = [x for t, x in self._history if t < calm_ts]
         reference = min(before) if before else calm
         gap = calm - reference
+        if direction == DOWN:
+            threshold = min(self._min_amplitude, self._gap_fraction * max(gap, 0.0))
+            blind = gap < self._min_gap - _EPSILON
+        else:
+            threshold = self._fast_step
+            blind = False
         self._event = self._last_event = _Event(
             start=ts,
             calm=calm,
@@ -246,14 +286,18 @@ class FlushDetector:
             extreme=value,
             extreme_ts=ts,
             gap=gap,
-            threshold=min(self._min_amplitude, self._gap_fraction * max(gap, 0.0)),
-            blind=gap < self._min_gap - _EPSILON,
+            threshold=threshold,
+            blind=blind,
+            max_step=max(step * direction, 0.0),
         )
 
     def _countable(self, event: _Event) -> bool:
+        if self._last_flush is not None and event.start - self._last_flush < self._debounce:
+            return False
+        if event.max_step >= self._fast_step - _EPSILON:
+            return True
         return (
             event.direction == DOWN
             and not event.blind
             and event.amplitude >= event.threshold - _EPSILON
-            and (self._last_flush is None or event.start - self._last_flush >= self._debounce)
         )

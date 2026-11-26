@@ -21,19 +21,28 @@
 
 ## Principle
 
-After a flush, the bowl fills with fresh mains water, colder than the water that sat in the bowl, then slowly warms back to room temperature. A flush is detected as a drop **towards the mains water temperature**:
+A flush replaces the water standing in the bowl with fresh water from the pipes. The probe sees the bowl temperature jump, then slowly drift back towards room temperature.
 
-- an event starts as soon as the temperature moves 0.3 °C away from its calm value within 30 min, whatever the speed;
-- it is counted if the drop reaches **min(1.0 °C, 35 % of the available gap)**, where the available gap is the calm temperature minus the lowest temperature of the last 12 hours (≈ mains water);
-- if the available gap is below 0.8 °C, the probe cannot tell a flush from noise: nothing is counted;
-- warming back towards room temperature is never counted, since it goes the other way;
-- at least 5 min between two flushes.
+**A flush can go either way.** In the morning, the mains water comes out cold (13–14 °C) and the bowl drops. In the afternoon, the water standing in the house pipes has warmed up to room temperature, so a flush can bring water *warmer* than the bowl: the temperature rises. Room temperature drift goes up too, though, so the direction alone cannot tell a flush from drift. Speed can.
+
+**Speed is read from the size of a single step, not from a rate.** Battery probes such as the Sonoff SNZB-02 report at once when the temperature moves by 0.5 °C, otherwise every 15 min. A flush shows up as one big step (0.5 °C or more) between two readings; drift arrives in small periodic steps (at most 0.4 °C per 15 min observed), and noise in 0.1 °C steps. A rate (°C/min) cannot be used: Home Assistant sees no change while the probe repeats the same value, so a jump after 90 minutes of identical readings looks slower than the evening drift.
+
+The rules:
+
+- **Fast step, either direction**: a single step of at least 0.5 °C is a flush;
+- **Large drop, at any speed** (for probes reporting in small steps): a drop towards the mains water temperature of at least **min(1.0 °C, 35 % of the available gap)**, where the available gap is the calm temperature minus the lowest temperature of the last 12 hours (≈ mains water). If that gap is below 0.8 °C, this rule counts nothing rather than counting noise;
+- a slow rise is never counted: that is room temperature drift;
+- an event starts when the temperature moves 0.3 °C away from its calm value within 30 min; at least 5 min between two flushes.
+
+On 57 h of real data checked against a water meter: 14 flushes out of 14, 4 of them upwards, no false positive.
 
 ```
 Litres = flushes × volume per flush × calibration
 ```
 
-The **Flush** binary sensor exposes the figures of the last event (calm value, available gap, threshold, amplitude) to help tune the settings.
+The **Flush** binary sensor exposes the figures of the last event (direction, calm value, available gap, threshold, amplitude, largest step) to help tune the settings.
+
+If your probe reports immediately on a different change than 0.5 °C, set **Fast step** to that value. A probe reporting every 0.1 °C change will not see warm (upward) flushes: only the large drop rule applies.
 
 ## Configuration
 
@@ -44,6 +53,7 @@ The **Flush** binary sensor exposes the figures of the last event (calm value, a
 | Amplitude to count a flush, upper bound (°C) | 1.0 |
 | Share of the available gap required | 0.35 |
 | Noise floor: minimum available gap (°C) | 0.8 |
+| Fast step: a single step this large counts as a flush (°C) | 0.5 |
 | Detection window (min) | 30 |
 | Minimum time between two flushes (min) | 5 |
 | Volume per flush (L) | 6 |
@@ -70,7 +80,7 @@ The meter cannot detect flushes on its own: a tap running for a minute looks exa
 ## Known limitations
 
 - Missed flushes when the mains water and the bowl water are at nearly the same temperature (spring and autumn): below the noise floor, nothing is counted.
-- Blind when the mains water is warmer than the bowl: only drops are counted.
+- A warm flush that raises the bowl by less than 0.5 °C is missed.
 - The probe only reports changes of 0.1 °C or more, so the fastest part of the change is not recorded precisely.
 - Without a water meter, every flush counts as the configured volume: half and full flushes cannot be told apart.
 

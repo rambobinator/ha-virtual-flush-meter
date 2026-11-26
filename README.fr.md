@@ -21,19 +21,28 @@ Intégration [Home Assistant](https://www.home-assistant.io/) qui **compte les c
 
 ## Principe
 
-Après une chasse, la cuvette se remplit d'eau fraîche du réseau, plus froide que l'eau qui stagnait, puis se réchauffe lentement vers la température de la pièce. Une chasse est détectée comme une baisse **vers la température de l'eau du réseau** :
+Une chasse remplace l'eau qui stagne dans la cuvette par de l'eau fraîche des tuyaux. La sonde voit la température de la cuvette sauter, puis revenir lentement vers celle de la pièce.
 
-- un événement démarre dès que la température s'écarte de 0,3 °C de sa valeur calme en 30 min, quelle que soit la vitesse ;
-- il est compté si la baisse atteint **min(1,0 °C ; 35 % de l'écart disponible)**, l'écart disponible étant la température calme moins la plus basse des 12 dernières heures (≈ eau du réseau) ;
-- si l'écart disponible est inférieur à 0,8 °C, la sonde ne distingue plus une chasse du bruit : rien n'est compté ;
-- le réchauffement vers la température de la pièce n'est jamais compté, puisqu'il va dans l'autre sens ;
-- au moins 5 min entre deux chasses.
+**Une chasse peut aller dans les deux sens.** Le matin, l'eau du réseau arrive froide (13-14 °C) et la cuvette baisse. L'après-midi, l'eau qui stagne dans les tuyaux de la maison s'est réchauffée à la température de la pièce : une chasse peut apporter de l'eau *plus chaude* que la cuvette, et la température monte. Mais la dérive vers la température de la pièce monte aussi : le sens seul ne distingue pas une chasse de la dérive. La vitesse, si.
+
+**La vitesse se lit dans la taille d'un pas, pas dans un débit.** Les sondes sur pile comme la Sonoff SNZB-02 envoient un rapport immédiat quand la température bouge de 0,5 °C, et sinon toutes les 15 min. Une chasse apparaît comme un seul grand pas (0,5 °C ou plus) entre deux lectures ; la dérive arrive par petits pas périodiques (au plus 0,4 °C par 15 min observés), et le bruit par pas de 0,1 °C. Une vitesse (°C/min) est inutilisable : Home Assistant ne voit aucun changement tant que la sonde répète la même valeur, si bien qu'un saut après 90 minutes de lectures identiques paraît plus lent que la dérive du soir.
+
+Les règles :
+
+- **Pas rapide, dans les deux sens** : un pas unique d'au moins 0,5 °C est une chasse ;
+- **Forte baisse, à n'importe quelle vitesse** (pour les sondes qui rapportent par petits pas) : une baisse vers la température de l'eau du réseau d'au moins **min(1,0 °C ; 35 % de l'écart disponible)**, l'écart disponible étant la température calme moins la plus basse des 12 dernières heures (≈ eau du réseau). Si cet écart est inférieur à 0,8 °C, cette règle ne compte rien plutôt que de compter du bruit ;
+- une montée lente n'est jamais comptée : c'est la dérive vers la température de la pièce ;
+- un événement démarre quand la température s'écarte de 0,3 °C de sa valeur calme en 30 min ; au moins 5 min entre deux chasses.
+
+Sur 57 h de données réelles vérifiées avec un compteur d'eau : 14 chasses sur 14, dont 4 montantes, aucune fausse détection.
 
 ```
 Litres = chasses × volume par chasse × calibration
 ```
 
-Le capteur binaire **Chasse** expose les chiffres du dernier événement (valeur calme, écart disponible, seuil, amplitude) pour aider à régler les paramètres.
+Le capteur binaire **Chasse** expose les chiffres du dernier événement (sens, valeur calme, écart disponible, seuil, amplitude, plus grand pas) pour aider à régler les paramètres.
+
+Si votre sonde envoie un rapport immédiat pour une autre variation que 0,5 °C, réglez **Pas rapide** sur cette valeur. Une sonde qui rapporte chaque variation de 0,1 °C ne verra pas les chasses tièdes (montantes) : seule la règle de forte baisse s'applique.
 
 ## Configuration
 
@@ -44,6 +53,7 @@ Le capteur binaire **Chasse** expose les chiffres du dernier événement (valeur
 | Amplitude pour compter une chasse, plafond (°C) | 1,0 |
 | Part de l'écart disponible exigée | 0,35 |
 | Plancher de bruit : écart disponible minimal (°C) | 0,8 |
+| Pas rapide : un pas unique de cette taille compte comme une chasse (°C) | 0,5 |
 | Fenêtre de détection (min) | 30 |
 | Délai minimal entre deux chasses (min) | 5 |
 | Volume par chasse (L) | 6 |
@@ -70,7 +80,7 @@ Le compteur ne peut pas détecter les chasses seul : un robinet ouvert une minut
 ## Limites connues
 
 - Chasses manquées quand l'eau du réseau et l'eau de la cuvette sont à peu près à la même température (intersaison) : sous le plancher de bruit, rien n'est compté.
-- Aveugle quand l'eau du réseau est plus chaude que la cuvette : seules les baisses sont comptées.
+- Une chasse tiède qui monte la cuvette de moins de 0,5 °C est ratée.
 - La sonde ne remonte que les variations d'au moins 0,1 °C : la partie la plus rapide de la variation est mal mesurée.
 - Sans compteur d'eau, chaque chasse compte pour le volume configuré : demi-chasses et chasses complètes ne sont pas distinguées.
 

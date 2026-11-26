@@ -26,29 +26,32 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
   Les traductions vivent DANS le composant, jamais à la racine du dépôt.
 - `brand/icon.png` (256 px) et `brand/icon@2x.png` (512 px), générés depuis `docs/logo.jpg`.
 
-## Détection d'une chasse (v2 : amplitude en fenêtre glissante)
-- Pas de porte de dérivée par pas : une vitesse entre deux échantillons dépend de la
-  fréquence d'émission de la sonde (cause des chasses ratées en v1).
+## Détection d'une chasse (v3 : contrôle asymétrique)
+- Physique : une chasse peut MONTER (l'après-midi, l'eau stagnant dans les tuyaux de la
+  maison s'est réchauffée) ou descendre (le matin, réseau froid). La dérive ambiante
+  monte aussi : c'est la vitesse qui distingue, pas le sens.
+- La vitesse se lit dans la TAILLE D'UN PAS, jamais dans un débit °C/min : HA ne voit
+  aucun changement quand la sonde répète la même valeur, donc un saut après 90 min
+  tenues paraît plus lent que la dérive (0,007 vs 0,027 °C/min sur données réelles).
+  La SNZB-02LD envoie un rapport immédiat à ±0,5 °C, sinon toutes les 15,0 min.
 - Départ : |valeur − valeur calme| ≥ `start_threshold` (0.3 °C) dans la fenêtre
-  `window` (30 min), dans les deux sens. Les échantillons antérieurs à la fin de
-  l'événement précédent, ou issus de l'historique recorder, ne sont jamais « calmes ».
-  La valeur tenue au début de la fenêtre (dernier échantillon avant) compte aussi :
-  HA n'émet pas de changement d'état quand la sonde renvoie la même valeur.
-- Un événement est daté de son premier échantillon en écart (pas de la valeur calme).
-- Écart disponible = valeur calme − minimum glissant réseau (échantillons antérieurs
-  à l'événement, sur `cold_water_window`).
-- Comptage : excursion VERS la référence réseau (vers le bas) d'au moins
-  min(`min_amplitude`, `gap_fraction` × écart). La dérive ambiante va toujours vers
-  l'ambiance (sens opposé) : jamais comptée. Ne pas réintroduire le comptage à la hausse.
-- Plancher de bruit : écart < `min_gap` (0.8 °C) → cécité assumée, rien n'est compté.
-- Fin : `debounce` min sans nouvel extrême, ou `window` après le départ ; une nouvelle
-  chasse exige `debounce` min depuis le départ de la précédente.
+  `window` (30 min), dans les deux sens. La valeur tenue au début de la fenêtre compte.
+  Les échantillons antérieurs à la fin de l'événement précédent, ou issus du recorder,
+  ne sont jamais « calmes ». Un événement est daté de son premier échantillon en écart.
+- Comptage :
+  - pas unique ≥ `fast_step` (0.5 °C), dans les deux sens, même en cécité ;
+  - ou baisse ≥ min(`min_amplitude`, `gap_fraction` × écart), écart = valeur calme −
+    minimum glissant réseau ; cécité si écart < `min_gap` (règle d'amplitude seulement) ;
+  - une montée lente n'est jamais comptée.
+- Fin : un candidat non compté reste ouvert toute la fenêtre (le second pas peut arriver
+  15 min plus tard) ; un événement compté se ferme après `debounce` min sans nouvel
+  extrême. Nouvelle chasse : `debounce` min après le départ de la précédente.
+- Redémarrage : un pas rapide dans l'historique recorder vaut chasse déjà comptée
+  (anti-rebond), pour ne pas recompter une chasse en cours.
 - Artefacts : un point isolé à plus de ±2 °C sans continuité est ignoré (`OUTLIER_THRESHOLD`).
 - Ignorer les états `unknown` / `unavailable` et les valeurs non numériques.
-- `gap_fraction` = 0.35 par défaut : rejeu de données réelles SNZB-02LD (pas de 0,5 °C,
-  émission ~15 min), 6 chasses sur 7 détectées, zéro faux positif.
-- Régressions obligatoires (tests/test_detector.py) : nuits sans chasse (dérive de
-  réchauffement ≥ 0.4 °C/15 min, refroidissement, bruit) = zéro détection.
+- Régressions obligatoires (tests/test_detector.py) : rejeu réel 14/14 (dont 4 montantes),
+  zéro faux positif ; nuits sans chasse (dérive, refroidissement, bruit) = zéro détection.
 
 ## Entités
 - `sensor.<name>_litres` : device_class water, state_class total_increasing, unité L,
@@ -90,7 +93,8 @@ Domaine `virtual_flush_meter`, code dans `custom_components/virtual_flush_meter/
 
 ## Limites connues
 - Faux négatifs quand T réseau ≈ T cuvette (intersaison) : cécité assumée sous `min_gap`.
-- Aveugle si l'eau du réseau est plus chaude que la cuvette (seules les baisses comptent).
+- Une chasse tiède qui monte de moins de `fast_step` est ratée ; une sonde qui rapporte
+  chaque 0,1 °C ne voit aucune chasse montante (seule la règle de baisse s'applique).
 - La sonde n'émet que sur changement ≥ 0.1 °C : la cinétique du pic est écrêtée.
 - Sans compteur, la classification 3 L / 6 L n'existe pas. Avec compteur, elle est
   mesurée mais une chasse mêlée à un autre usage est classée « complète » par défaut.
